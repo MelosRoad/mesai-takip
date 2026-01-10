@@ -26,7 +26,7 @@ export default async function AdminDashboard() {
     // Prepare Chart Data
     const userStats = new Map<string, { userId: string; name: string; weekendHours: number; weekdayHours: number }>()
 
-    overtimes.forEach(ot => {
+    overtimes.forEach((ot: any) => {
         const hours = getDuration(ot.startTime, ot.endTime)
         const existing = userStats.get(ot.userId) || { userId: ot.userId, name: ot.user.name, weekendHours: 0, weekdayHours: 0 }
 
@@ -41,7 +41,7 @@ export default async function AdminDashboard() {
     const chartData = Array.from(userStats.values())
 
     // Prepare Calendar Events
-    const calendarEvents = overtimes.map(ot => ({
+    const calendarEvents = overtimes.map((ot: any) => ({
         title: `${ot.user.name} (${ot.startTime}-${ot.endTime})`,
         start: new Date(ot.date), // Simple date, might need time adjustment
         end: new Date(ot.date),
