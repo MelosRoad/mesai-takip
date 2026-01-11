@@ -251,6 +251,13 @@ export default function UserDashboard() {
                         <Button onClick={fetchReport} className="mb-1" disabled={isLoading}>Kayıtları Getir</Button>
                     </div>
 
+                    {/* Explicit No Records Warning */}
+                    {toastMessage.includes("bulunamadı") && (
+                        <div className="p-4 mb-6 text-sm text-red-800 bg-red-100 rounded-lg border border-red-200">
+                            ⚠️ <strong>Kayıt Yok:</strong> Seçilen tarih aralığında veritabanında herhangi bir mesai kaydı bulunamadı.
+                        </div>
+                    )}
+
                     {/* Results Table */}
                     {reportData.length > 0 && (
                         <div className="mb-8">
