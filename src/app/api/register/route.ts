@@ -30,8 +30,8 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ success: true })
 
-    } catch (e) {
+    } catch (e: any) {
         console.error("Register Error:", e)
-        return NextResponse.json({ error: "Kayıt oluşturulamadı." }, { status: 500 })
+        return NextResponse.json({ error: "Kayıt Hatası: " + (e.message || e.toString()) }, { status: 500 })
     }
 }
