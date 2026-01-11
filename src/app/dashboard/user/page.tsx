@@ -182,10 +182,10 @@ export default function UserDashboard() {
 
         // Load Template
         const img = new Image()
-        img.src = "/form-sablon.png" // User provided template coming from public folder
+        img.src = "/form-sablon.jpg" // Using existing JPG
         img.onload = () => {
             // Add Template to PDF (A4 size approx: 210 x 297 mm)
-            doc.addImage(img, "PNG", 0, 0, 210, 297)
+            doc.addImage(img, "JPEG", 0, 0, 210, 297)
 
             // Setup Text
             doc.setFontSize(10)
@@ -211,7 +211,20 @@ export default function UserDashboard() {
             doc.save("mesai-formu.pdf")
         }
         img.onerror = () => {
-            alert("Şablon resmi (/form-sablon.png) bulunamadı! Lütfen public klasörüne yükleyin.")
+            // Fallback to white background if image fails
+            alert("Şablon resmi (/form-sablon.jpg) yüklenemedi. Beyaz sayfa oluşturuluyor...")
+            doc.setFontSize(10)
+            doc.setTextColor(0, 0, 0)
+            let y = 50
+            doc.text("MESAİ KONTROL FORMU (Şablonsuz)", 20, 20)
+
+            reportData.forEach((item, index) => {
+                const dateStr = new Date(item.date).toLocaleDateString('tr-TR')
+                doc.text(`${index + 1}. ${dateStr} | ${item.startTime}-${item.endTime} | ${item.description}`, 20, y)
+                y += 10
+            })
+            doc.addImage(signatureData!, "PNG", 140, y + 20, 40, 20)
+            doc.save("mesai-formu-simple.pdf")
         }
     }
 
