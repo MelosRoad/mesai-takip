@@ -167,7 +167,7 @@ export default function UserDashboard() {
         }
     }
 
-    // 4. Generate Professional Table PDF
+    // 4. Generate PDF with Custom Template
     const generatePDF = () => {
         if (!signatureData) {
             alert("Lütfen imza ekleyin (Çizin veya Yükleyin).")
@@ -180,81 +180,60 @@ export default function UserDashboard() {
 
         const doc = new jsPDF()
 
-        // --- HEADER ---
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(18)
-        doc.text("MESAI TAKIP CIPZELGESI", 105, 20, { align: "center" })
+        // Load Template
+        const img = new Image()
+        img.src = "/form-sablon.jpg" // Expecting the user's template here
+        img.onload = () => {
+            // A4 Dimensions: 210mm x 297mm
+            doc.addImage(img, "JPEG", 0, 0, 210, 297)
 
-        doc.setFontSize(12)
-        doc.setFont("helvetica", "normal")
-        doc.text(`Tarih: ${new Date().toLocaleDateString('tr-TR')}`, 20, 30)
+            doc.setFontSize(11)
+            doc.setTextColor(0, 0, 0)
+            doc.setFont("helvetica", "normal")
 
-        // Report Period
-        const startStr = startDate ? startDate.toLocaleDateString('tr-TR') : "-"
-        const endStr = endDate ? endDate.toLocaleDateString('tr-TR') : "-"
-        doc.text(`Donem: ${startStr} - ${endStr}`, 20, 36)
+            // --- DATA MAPPING ---
+            // Adjust these coordinates to match the Excel/Image lines
+            let y = 100 // Starting Y position (estimated)
+            const xDate = 25
+            const xTime = 65
+            const xDesc = 110
 
-        // --- TABLE HEADERS ---
-        const startY = 45
-        doc.setFont("helvetica", "bold")
-        doc.setFillColor(240, 240, 240)
-        doc.rect(20, startY, 170, 10, "F") // Background
-        doc.rect(20, startY, 170, 10, "S") // Border
+            reportData.forEach((item, index) => {
+                const dateStr = new Date(item.date).toLocaleDateString('tr-TR')
+                const timeStr = `${item.startTime} - ${item.endTime}`
+                const descStr = item.description || ""
 
-        doc.text("Tarih", 25, startY + 7)
-        doc.text("Saat Araligi", 60, startY + 7)
-        doc.text("Aciklama", 110, startY + 7)
+                // Check if we need a new page
+                if (y > 250) {
+                    doc.addPage()
+                    doc.addImage(img, "JPEG", 0, 0, 210, 297) // Re-add template to new page
+                    y = 100 // Reset Y
+                }
 
-        // --- TABLE CONTENT ---
-        let y = startY + 10
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(10)
+                doc.text(dateStr, xDate, y)
+                doc.text(timeStr, xTime, y)
+                doc.text(descStr, xDesc, y)
 
-        reportData.forEach((item) => {
-            const dateStr = new Date(item.date).toLocaleDateString('tr-TR')
-            const timeStr = `${item.startTime} - ${item.endTime}`
-            const descStr = item.description || "-"
+                y += 10 // Line height
+            })
 
-            // Row Rect
-            doc.rect(20, y, 170, 10, "S")
+            // Add Signature
+            // Assuming signature box is at bottom right
+            doc.addImage(signatureData!, "PNG", 140, 250, 40, 20)
 
-            // Cells
-            doc.text(dateStr, 25, y + 7)
-            doc.text(timeStr, 60, y + 7)
-            doc.text(descStr, 110, y + 7)
-
-            y += 10
-
-            // Page Break Check
-            if (y > 270) {
-                doc.addPage()
-                y = 20
+            const pageCount = doc.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(10);
+                doc.text('Sayfa ' + i + ' / ' + pageCount, 190, 287, { align: 'right' });
             }
-        })
 
-        // --- FOOTER & SIGNATURE ---
-        // Ensure space for signature
-        if (y > 240) {
-            doc.addPage()
-            y = 20
+            doc.save("mesai-formu.pdf")
         }
 
-        y += 20
-        doc.setFont("helvetica", "bold")
-        doc.text("PERSONEL IMZA", 150, y, { align: "center" })
-
-        // Add Signature Image
-        // width: 40, height: 20
-        doc.addImage(signatureData, "PNG", 130, y + 5, 40, 20)
-
-        const pageCount = doc.getNumberOfPages();
-        for (let i = 1; i <= pageCount; i++) {
-            doc.setPage(i);
-            doc.setFontSize(10);
-            doc.text('Sayfa ' + i + ' / ' + pageCount, 190, 287, { align: 'right' });
+        img.onerror = () => {
+            alert("Şablon resmi (/form-sablon.jpg) bulunamadı! Lütfen public klasörüne yükleyin.")
         }
-
-        doc.save("mesai-formu.pdf")
     }
 
     return (
