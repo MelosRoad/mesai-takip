@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { signIn, getSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
 
 export default function LoginPage() {
     const router = useRouter()
@@ -77,6 +78,12 @@ export default function LoginPage() {
                     >
                         Giriş Yap
                     </button>
+                    <div className="text-center text-sm mt-4">
+                        Hesabın yok mu?{" "}
+                        <Link href="/register" className="text-blue-600 hover:underline">
+                            Kayıt Ol
+                        </Link>
+                    </div>
                 </form>
             </div>
         </div>
