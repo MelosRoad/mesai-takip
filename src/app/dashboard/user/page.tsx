@@ -204,7 +204,7 @@ export default function UserDashboard() {
                                         <Popover>
                                             <PopoverTrigger asChild>
                                                 <FormControl>
-                                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal bg-white text-black border-gray-400", !field.value && "text-muted-foreground")}>
                                                         {field.value ? format(field.value, "PPP", { locale: tr }) : <span>Tarih seçin</span>}
                                                         <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                                                     </Button>
@@ -219,12 +219,12 @@ export default function UserDashboard() {
                                 )}
                             />
                             <div className="grid grid-cols-2 gap-4">
-                                <FormField control={form.control} name="startTime" render={({ field }) => (<FormItem><FormLabel>Başlangıç</FormLabel><FormControl><Input placeholder="09:00" {...field} /></FormControl><FormMessage /></FormItem>)} />
-                                <FormField control={form.control} name="endTime" render={({ field }) => (<FormItem><FormLabel>Bitiş</FormLabel><FormControl><Input placeholder="18:00" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="startTime" render={({ field }) => (<FormItem><FormLabel>Başlangıç</FormLabel><FormControl><Input placeholder="09:00" {...field} className="bg-white text-black border-gray-400 placeholder:text-gray-500" /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="endTime" render={({ field }) => (<FormItem><FormLabel>Bitiş</FormLabel><FormControl><Input placeholder="18:00" {...field} className="bg-white text-black border-gray-400 placeholder:text-gray-500" /></FormControl><FormMessage /></FormItem>)} />
                             </div>
-                            <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>Açıklama (Opsiyonel)</FormLabel><FormControl><Input placeholder="Proje detayları..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+                            <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>Açıklama (Opsiyonel)</FormLabel><FormControl><Input placeholder="Proje detayları..." {...field} className="bg-white text-black border-gray-400 placeholder:text-gray-500" /></FormControl><FormMessage /></FormItem>)} />
 
-                            <Button type="submit" className="w-full" disabled={isLoading}>
+                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white" disabled={isLoading}>
                                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Kaydet"}
                             </Button>
                         </form>
@@ -250,6 +250,13 @@ export default function UserDashboard() {
                         </div>
                         <Button onClick={fetchReport} className="mb-1" disabled={isLoading}>Kayıtları Getir</Button>
                     </div>
+
+                    {/* Explicit No Records Warning */}
+                    {toastMessage.includes("bulunamadı") && (
+                        <div className="p-4 mb-6 text-sm text-red-800 bg-red-100 rounded-lg border border-red-200">
+                            ⚠️ <strong>Kayıt Yok:</strong> Seçilen tarih aralığında veritabanında herhangi bir mesai kaydı bulunamadı. Lütfen "Mesai Giriş" sekmesinden kayıt eklediğinizden emin olun (Demo modunda kayıtlar sadece o anki oturumda geçerlidir).
+                        </div>
+                    )}
 
                     {/* Explicit No Records Warning */}
                     {toastMessage.includes("bulunamadı") && (
