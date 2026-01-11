@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { signIn } from "next-auth/react"
+import { signIn, getSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
@@ -23,7 +23,12 @@ export default function LoginPage() {
         if (res?.error) {
             setError("Giriş başarısız. Bilgilerinizi kontrol edin.")
         } else {
-            router.push("/dashboard/user")
+            const session = await getSession()
+            if (session?.user && (session.user as any).role === 'admin') {
+                router.push("/dashboard/admin")
+            } else {
+                router.push("/dashboard/user")
+            }
             router.refresh()
         }
     }
