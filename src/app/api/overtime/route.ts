@@ -4,6 +4,43 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { sendApprovalMail } from "@/lib/mail-service"
 
+export async function GET(req: Request) {
+    try {
+        const session = await getServerSession(authOptions)
+        if (!session || !session.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        const { searchParams } = new URL(req.url)
+        const start = searchParams.get('start')
+        const end = searchParams.get('end')
+
+        if (!start || !end) {
+            return NextResponse.json({ error: "Start and End dates required" }, { status: 400 })
+        }
+
+        const userId = (session.user as any).id
+
+        const overtimes = await prisma.overtime.findMany({
+            where: {
+                userId,
+                date: {
+                    gte: new Date(start),
+                    lte: new Date(end)
+                }
+            },
+            orderBy: {
+                date: 'asc'
+            }
+        })
+
+        return NextResponse.json({ success: true, data: overtimes })
+    } catch (error) {
+        console.error("Fetch Error:", error)
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    }
+}
+
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions)

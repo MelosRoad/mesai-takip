@@ -1,181 +1,324 @@
 "use client"
 
 import { useState } from "react"
-import { useSession } from "next-auth/react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { CalendarIcon, Loader2, UploadCloud } from "lucide-react"
+import { format } from "date-fns"
+import { tr } from "date-fns/locale"
+import { cn } from "@/lib/utils"
+// Components
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import {
+    Form,
+    FormControl,
+    FormField,
+    FormItem,
+    FormLabel,
+    FormMessage,
+} from "@/components/ui/form"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
+import { Input } from "@/components/ui/input"
 import { SignatureBox } from "@/components/signature-box"
-import { jsPDF } from "jspdf"
+// PDF Support
+import jsPDF from "jspdf"
+
+// --- Zod Schema for Entry ---
+const formSchema = z.object({
+    date: z.date({ required_error: "Tarih seçiniz" }),
+    startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Saat formatı Örn: 09:00"),
+    endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Saat formatı Örn: 18:00"),
+    description: z.string().optional(),
+})
 
 export default function UserDashboard() {
-    const { data: session } = useSession()
-    const [date, setDate] = useState("")
-    const [startTime, setStartTime] = useState("")
-    const [endTime, setEndTime] = useState("")
-    const [description, setDescription] = useState("")
-    const [signature, setSignature] = useState("")
-    const [loading, setLoading] = useState(false)
-    const [message, setMessage] = useState("")
+    const [activeTab, setActiveTab] = useState<"entry" | "report">("entry")
+    const [isLoading, setIsLoading] = useState(false)
+    const [toastMessage, setToastMessage] = useState("")
 
-    const generatePDF = () => {
-        const doc = new jsPDF()
-        doc.setFont("helvetica", "bold")
-        doc.setFontSize(22)
-        doc.text("Mesai Takip Formu", 105, 20, { align: "center" })
+    // -- REPORT STATE --
+    const [startDate, setStartDate] = useState<Date>()
+    const [endDate, setEndDate] = useState<Date>()
+    const [reportData, setReportData] = useState<any[]>([])
+    const [signatureType, setSignatureType] = useState<"draw" | "upload">("draw")
+    const [signatureData, setSignatureData] = useState<string | null>(null) // base64
+    const [uploadedSignatureName, setUploadedSignatureName] = useState("")
 
-        doc.setFont("helvetica", "normal")
-        doc.setFontSize(12)
-        doc.text(`Personel: ${session?.user?.name || session?.user?.email}`, 20, 40)
-        doc.text(`Tarih: ${date}`, 20, 50)
+    // Form definition
+    const form = useForm<z.infer<typeof formSchema>>({
+        resolver: zodResolver(formSchema),
+        defaultValues: {
+            description: "",
+        },
+    })
 
-        doc.rect(20, 60, 170, 0.5, 'F') // Line separator
-
-        doc.text(`Mesai Başlangıç Saati: ${startTime}`, 20, 75)
-        doc.text(`Mesai Bitiş Saati: ${endTime}`, 20, 85)
-
-        doc.text("Yapılan İş / Açıklama:", 20, 100)
-        doc.text(description, 20, 107, { maxWidth: 170 })
-
-        if (signature) {
-            doc.text("Personel İmzası:", 130, 140)
-            doc.addImage(signature, "PNG", 120, 145, 60, 30)
-        }
-
-        doc.setFontSize(10)
-        doc.text("Bu belge dijital olarak oluşturulmuştur ve onay için sunulmuştur.", 105, 280, { align: "center" })
-
-        return doc.output('datauristring')
-    }
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        if (!signature) {
-            setMessage("Lütfen imza atınız.")
-            return
-        }
-
-        setLoading(true)
-        setMessage("")
-
+    // 1. Submit Single Entry
+    async function onEntrySubmit(values: z.infer<typeof formSchema>) {
+        setIsLoading(true)
+        setToastMessage("")
         try {
-            const pdfBase64 = generatePDF()
-
             const res = await fetch("/api/overtime", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    date,
-                    startTime,
-                    endTime,
-                    description,
-                    signature,
-                    pdfBase64
+                    date: values.date,
+                    startTime: values.startTime,
+                    endTime: values.endTime,
+                    description: values.description,
+                    // Entry mode doesn't need signature/pdf immediately
+                    signature: "pending",
+                    pdfBase64: null,
                 }),
             })
 
             const data = await res.json()
+            if (!res.ok) throw new Error(data.error || "Hata")
 
-            if (res.ok) {
-                setMessage("Mesai başarıyla kaydedildi, PDF oluşturuldu ve onaya gönderildi.")
-                // Reset form
-                setDate("")
-                setStartTime("")
-                setEndTime("")
-                setDescription("")
-            } else {
-                setMessage(`Hata: ${data.error || "Bir sorun oluştu."}`)
-            }
+            setToastMessage("✅ Kayıt başarıyla eklendi!")
+            form.reset()
         } catch (error) {
-            console.error(error)
-            setMessage("Sunucu hatası.")
+            setToastMessage("❌ Bir hata oluştu.")
         } finally {
-            setLoading(false)
+            setIsLoading(false)
+        }
+    }
+
+    // 2. Fetch Report Data
+    async function fetchReport() {
+        if (!startDate || !endDate) {
+            alert("Lütfen başlangıç ve bitiş tarihini seçin.")
+            return
+        }
+        setIsLoading(true)
+        try {
+            const res = await fetch(`/api/overtime?start=${startDate.toISOString()}&end=${endDate.toISOString()}`)
+            const data = await res.json()
+            if (data.success) {
+                setReportData(data.data)
+                if (data.data.length === 0) setToastMessage("⚠️ Bu aralıkta kayıt bulunamadı.")
+                else setToastMessage(`✅ ${data.data.length} kayıt bulundu.`)
+            }
+        } catch (e) {
+            setToastMessage("❌ Veri çekilemedi.")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    // 3. Handle File Upload (Signature)
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            setUploadedSignatureName(file.name)
+            const reader = new FileReader()
+            reader.onloadend = () => {
+                setSignatureData(reader.result as string)
+            }
+            reader.readAsDataURL(file)
+        }
+    }
+
+    // 4. Generate Custom Template PDF
+    const generatePDF = () => {
+        if (!signatureData) {
+            alert("Lütfen imza ekleyin (Çizin veya Yükleyin).")
+            return
+        }
+        if (reportData.length === 0) {
+            alert("Listelenecek veri yok.")
+            return
+        }
+
+        const doc = new jsPDF()
+
+        // Load Template
+        const img = new Image()
+        img.src = "/form-sablon.png" // User provided template coming from public folder
+        img.onload = () => {
+            // Add Template to PDF (A4 size approx: 210 x 297 mm)
+            doc.addImage(img, "PNG", 0, 0, 210, 297)
+
+            // Setup Text
+            doc.setFontSize(10)
+            doc.setTextColor(0, 0, 0)
+
+            // Loop and Print Data
+            // TODO: Coordinates need to be adjusted based on the actual template image.
+            // Assuming a list structure starting at Y=100
+            let y = 100
+            reportData.forEach((item, index) => {
+                const dateStr = new Date(item.date).toLocaleDateString('tr-TR')
+                // Simple Row: Date - Start - End - Verified (mock)
+                doc.text(`${index + 1}. ${dateStr}`, 20, y)
+                doc.text(`${item.startTime}`, 60, y)
+                doc.text(`${item.endTime}`, 90, y)
+                doc.text(`${item.description || '-'}`, 120, y)
+                y += 10
+            })
+
+            // Add Signature (Bottom Right usually)
+            doc.addImage(signatureData!, "PNG", 140, 250, 40, 20)
+
+            doc.save("mesai-formu.pdf")
+        }
+        img.onerror = () => {
+            alert("Şablon resmi (/form-sablon.png) bulunamadı! Lütfen public klasörüne yükleyin.")
         }
     }
 
     return (
         <div className="space-y-6">
-            <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-                <div className="md:grid md:grid-cols-3 md:gap-6">
-                    <div className="md:col-span-1">
-                        <h3 className="text-lg font-medium leading-6 text-gray-900">Mesai Formu</h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                            Lütfen mesai bilgilerinizi eksiksiz giriniz ve imzalayınız.
-                        </p>
+            <div className="flex space-x-4 border-b pb-2">
+                <button
+                    onClick={() => setActiveTab("entry")}
+                    className={cn("px-4 py-2 font-medium rounded-t-lg transition-colors", activeTab === "entry" ? "bg-white text-blue-600 border-t border-x" : "text-gray-500 hover:text-gray-700")}
+                >
+                    Mesai Giriş
+                </button>
+                <button
+                    onClick={() => setActiveTab("report")}
+                    className={cn("px-4 py-2 font-medium rounded-t-lg transition-colors", activeTab === "report" ? "bg-white text-blue-600 border-t border-x" : "text-gray-500 hover:text-gray-700")}
+                >
+                    Rapor Oluştur
+                </button>
+            </div>
+
+            {/* TAB 1: ENTRY */}
+            {activeTab === "entry" && (
+                <div className="bg-white p-6 rounded-lg shadow max-w-lg mx-auto">
+                    <h2 className="text-xl font-bold mb-4">Yeni Mesai Kaydı</h2>
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onEntrySubmit)} className="space-y-6">
+                            <FormField
+                                control={form.control}
+                                name="date"
+                                render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                        <FormLabel>Tarih</FormLabel>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <FormControl>
+                                                    <Button variant={"outline"} className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                                                        {field.value ? format(field.value, "PPP", { locale: tr }) : <span>Tarih seçin</span>}
+                                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                                    </Button>
+                                                </FormControl>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0" align="start">
+                                                <Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date > new Date() || date < new Date("1900-01-01")} initialFocus />
+                                            </PopoverContent>
+                                        </Popover>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField control={form.control} name="startTime" render={({ field }) => (<FormItem><FormLabel>Başlangıç</FormLabel><FormControl><Input placeholder="09:00" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                                <FormField control={form.control} name="endTime" render={({ field }) => (<FormItem><FormLabel>Bitiş</FormLabel><FormControl><Input placeholder="18:00" {...field} /></FormControl><FormMessage /></FormItem>)} />
+                            </div>
+                            <FormField control={form.control} name="description" render={({ field }) => (<FormItem><FormLabel>Açıklama (Opsiyonel)</FormLabel><FormControl><Input placeholder="Proje detayları..." {...field} /></FormControl><FormMessage /></FormItem>)} />
+
+                            <Button type="submit" className="w-full" disabled={isLoading}>
+                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Kaydet"}
+                            </Button>
+                        </form>
+                    </Form>
+                    {toastMessage && <div className="mt-4 p-3 bg-blue-50 text-blue-800 rounded text-center text-sm">{toastMessage}</div>}
+                </div>
+            )}
+
+            {/* TAB 2: REPORT */}
+            {activeTab === "report" && (
+                <div className="bg-white p-6 rounded-lg shadow">
+                    <h2 className="text-xl font-bold mb-6">Toplu Form Oluştur</h2>
+
+                    {/* Date Range Picker */}
+                    <div className="flex flex-col md:flex-row gap-4 mb-6 items-end">
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium">Başlangıç</label>
+                            <Calendar mode="single" selected={startDate} onSelect={setStartDate} className="border rounded-md" />
+                        </div>
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium">Bitiş</label>
+                            <Calendar mode="single" selected={endDate} onSelect={setEndDate} className="border rounded-md" />
+                        </div>
+                        <Button onClick={fetchReport} className="mb-1" disabled={isLoading}>Kayıtları Getir</Button>
                     </div>
-                    <div className="mt-5 md:mt-0 md:col-span-2">
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid grid-cols-6 gap-6">
-                                <div className="col-span-6 sm:col-span-3">
-                                    <label className="block text-sm font-medium text-gray-700">Tarih</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        value={date}
-                                        onChange={(e) => setDate(e.target.value)}
-                                        className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border text-gray-900"
-                                    />
-                                </div>
 
-                                <div className="col-span-6 sm:col-span-3">
-                                    {/* Empty column for layout */}
-                                </div>
+                    {/* Results Table */}
+                    {reportData.length > 0 && (
+                        <div className="mb-8">
+                            <h3 className="font-semibold mb-2">Bulunan Kayıtlar ({reportData.length})</h3>
+                            <div className="border rounded-lg overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-4 py-2">Tarih</th>
+                                            <th className="px-4 py-2">Saat</th>
+                                            <th className="px-4 py-2">Açıklama</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {reportData.map((item, idx) => (
+                                            <tr key={idx} className="bg-white">
+                                                <td className="px-4 py-2">{new Date(item.date).toLocaleDateString('tr-TR')}</td>
+                                                <td className="px-4 py-2">{item.startTime} - {item.endTime}</td>
+                                                <td className="px-4 py-2">{item.description}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
 
-                                <div className="col-span-6 sm:col-span-3">
-                                    <label className="block text-sm font-medium text-gray-700">Başlangıç Saati</label>
-                                    <input
-                                        type="time"
-                                        required
-                                        value={startTime}
-                                        onChange={(e) => setStartTime(e.target.value)}
-                                        className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border text-gray-900"
-                                    />
-                                </div>
-
-                                <div className="col-span-6 sm:col-span-3">
-                                    <label className="block text-sm font-medium text-gray-700">Bitiş Saati</label>
-                                    <input
-                                        type="time"
-                                        required
-                                        value={endTime}
-                                        onChange={(e) => setEndTime(e.target.value)}
-                                        className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border text-gray-900"
-                                    />
-                                </div>
-
-                                <div className="col-span-6">
-                                    <label className="block text-sm font-medium text-gray-700">Açıklama / Yapılan İş</label>
-                                    <textarea
-                                        rows={3}
-                                        value={description}
-                                        onChange={(e) => setDescription(e.target.value)}
-                                        className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md py-2 px-3 border text-gray-900"
-                                    />
-                                </div>
-
-                                <div className="col-span-6">
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">İmza</label>
-                                    <SignatureBox onSave={setSignature} />
-                                </div>
+                    {/* Signature Section */}
+                    {reportData.length > 0 && (
+                        <div className="space-y-4 border-t pt-6">
+                            <h3 className="font-semibold">İmza Ekle</h3>
+                            <div className="flex gap-4 text-sm mb-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sigType" checked={signatureType === "draw"} onChange={() => setSignatureType("draw")} />
+                                    Ekrana Çiz
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="radio" name="sigType" checked={signatureType === "upload"} onChange={() => setSignatureType("upload")} />
+                                    Resim Yükle
+                                </label>
                             </div>
 
-                            {message && (
-                                <div className={`p-4 rounded-md ${message.includes("Hata") ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
-                                    {message}
+                            {signatureType === "draw" ? (
+                                <div className="border rounded-md inline-block">
+                                    <SignatureBox onSave={(data) => setSignatureData(data)} />
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-4">
+                                    <label className="flex flex-col items-center justify-center w-64 h-32 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
+                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                            <UploadCloud className="w-8 h-8 mb-3 text-gray-500" />
+                                            <p className="text-sm text-gray-500">İmza Görselini Seçin</p>
+                                        </div>
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                                    </label>
+                                    {uploadedSignatureName && <span className="text-sm text-green-600">Seçildi: {uploadedSignatureName}</span>}
                                 </div>
                             )}
 
-                            <div className="flex justify-end">
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                                >
-                                    {loading ? "Gönderiliyor..." : "Formu Oluştur ve Gönder"}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
+                            <Button onClick={generatePDF} className="w-full md:w-auto mt-4" size="lg">
+                                PDF Formu İndir
+                            </Button>
+                        </div>
+                    )}
+
+                    {toastMessage && <div className="mt-4 text-sm text-gray-600">{toastMessage}</div>}
                 </div>
-            </div>
+            )}
         </div>
     )
 }
