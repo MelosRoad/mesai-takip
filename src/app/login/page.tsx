@@ -31,7 +31,10 @@ export default function LoginPage() {
     return (
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <div className="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
-                <h1 className="text-2xl font-bold text-center mb-6 text-gray-900">Giriş Yap</h1>
+                <h1 className="text-2xl font-bold text-center mb-6 text-gray-900">
+                    Giriş Yap
+                    <span className="block text-sm font-normal text-gray-500 mt-1">Versiyon 1.2</span>
+                </h1>
                 {error && (
                     <div className="p-3 mb-4 text-sm text-red-600 bg-red-100 rounded-lg">
                         {error}
