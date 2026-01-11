@@ -31,7 +31,7 @@ import jsPDF from "jspdf"
 
 // --- Zod Schema for Entry ---
 const formSchema = z.object({
-    date: z.date({ required_error: "Tarih seçiniz" }),
+    date: z.date({ required_error: "Tarih seçiniz", invalid_type_error: "Geçersiz tarih" }),
     startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Saat formatı Örn: 09:00"),
     endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Saat formatı Örn: 18:00"),
     description: z.string().optional(),
