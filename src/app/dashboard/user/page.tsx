@@ -247,7 +247,7 @@ export default function UserDashboard() {
         // width: 40, height: 20
         doc.addImage(signatureData, "PNG", 130, y + 5, 40, 20)
 
-        const pageCount = doc.internal.getNumberOfPages();
+        const pageCount = doc.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
             doc.setFontSize(10);
