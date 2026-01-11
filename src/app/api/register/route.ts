@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma"
 
 export async function POST(req: Request) {
     try {
-        const { name, username, password } = await req.json()
+        const { username, password } = await req.json()
 
-        if (!name || !username || !password) {
-            return NextResponse.json({ error: "Tüm alanları doldurunuz." }, { status: 400 })
+        if (!username || !password) {
+            return NextResponse.json({ error: "Kullanıcı adı ve şifre zorunludur." }, { status: 400 })
         }
 
         // Check availability
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
         // Create User (Role default 'user')
         const user = await prisma.user.create({
             data: {
-                name,
+                name: username, // Default Name to Username
                 username,
                 password, // Note: In production, hash this password!
                 role: 'user'
