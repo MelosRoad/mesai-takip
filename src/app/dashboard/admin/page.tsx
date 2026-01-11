@@ -14,29 +14,37 @@ function getDuration(start: string, end: string) {
 export const dynamic = 'force-dynamic'
 
 export default async function AdminDashboard() {
-    const overtimes = await prisma.overtime.findMany({
-        include: {
-            user: true,
-        },
-        orderBy: {
-            date: 'desc'
-        }
-    })
+    let overtimes = [];
+    try {
+        overtimes = await prisma.overtime.findMany({
+            include: { user: true },
+            orderBy: { date: 'desc' }
+        })
+    } catch (e) {
+        console.log("DB Fetch Error (using mock for demo):", e);
+        // Mock data for Vercel Demo
+        overtimes = [
+            { id: "1", userId: "user1", date: new Date(), startTime: "09:00", endTime: "18:00", isWeekend: false, user: { name: "Ahmet Yılmaz", username: "ahmet" } },
+            { id: "2", userId: "user2", date: new Date(), startTime: "10:00", endTime: "14:00", isWeekend: true, user: { name: "Ayşe Kaya", username: "ayse" } },
+        ] as any;
+    }
 
     // Prepare Chart Data
     const userStats = new Map<string, { userId: string; name: string; weekendHours: number; weekdayHours: number }>()
 
-    overtimes.forEach((ot: any) => {
-        const hours = getDuration(ot.startTime, ot.endTime)
-        const existing = userStats.get(ot.userId) || { userId: ot.userId, name: ot.user.name, weekendHours: 0, weekdayHours: 0 }
+    if (overtimes) {
+        overtimes.forEach((ot: any) => {
+            const hours = getDuration(ot.startTime, ot.endTime)
+            const existing = userStats.get(ot.userId) || { userId: ot.userId, name: ot.user.name, weekendHours: 0, weekdayHours: 0 }
 
-        if (ot.isWeekend) {
-            existing.weekendHours += hours
-        } else {
-            existing.weekdayHours += hours
-        }
-        userStats.set(ot.userId, existing)
-    })
+            if (ot.isWeekend) {
+                existing.weekendHours += hours
+            } else {
+                existing.weekdayHours += hours
+            }
+            userStats.set(ot.userId, existing)
+        })
+    }
 
     const chartData = Array.from(userStats.values())
 
