@@ -71,7 +71,6 @@ export default function UserDashboard() {
                     startTime: values.startTime,
                     endTime: values.endTime,
                     description: values.description,
-                    // Entry mode doesn't need signature/pdf immediately
                     signature: "pending",
                     pdfBase64: null,
                 }),
@@ -80,7 +79,20 @@ export default function UserDashboard() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || "Hata")
 
-            setToastMessage("✅ Kayıt başarıyla eklendi!")
+            // LOCAL STORAGE FALLBACK (Demo Mode Persistence)
+            // Even if API "pretends" to save, we save locally to ensure it shows up in reports.
+            const demoRecord = {
+                id: "demo-" + Math.random(),
+                date: values.date.toISOString(),
+                startTime: values.startTime,
+                endTime: values.endTime,
+                description: values.description || "",
+                userOrName: "Demo User"
+            }
+            const existing = JSON.parse(localStorage.getItem("overtime_demo_data") || "[]")
+            localStorage.setItem("overtime_demo_data", JSON.stringify([...existing, demoRecord]))
+
+            setToastMessage("✅ Kayıt başarıyla eklendi! (Demo: Tarayıcıya kaydedildi)")
             form.reset()
         } catch (error) {
             setToastMessage("❌ Bir hata oluştu.")
@@ -97,15 +109,46 @@ export default function UserDashboard() {
         }
         setIsLoading(true)
         try {
+            // 1. Try API
             const res = await fetch(`/api/overtime?start=${startDate.toISOString()}&end=${endDate.toISOString()}`)
-            const data = await res.json()
-            if (data.success) {
-                setReportData(data.data)
-                if (data.data.length === 0) setToastMessage("⚠️ Bu aralıkta kayıt bulunamadı.")
-                else setToastMessage(`✅ ${data.data.length} kayıt bulundu.`)
+            const apiData = await res.json()
+
+            let combinedData: any[] = []
+
+            if (apiData.success && Array.isArray(apiData.data)) {
+                combinedData = [...apiData.data]
             }
+
+            // 2. Merge with LocalStorage (Demo Data)
+            const localDataRaw = localStorage.getItem("overtime_demo_data")
+            if (localDataRaw) {
+                const localData = JSON.parse(localDataRaw)
+                // Filter by date range
+                const filteredLocal = localData.filter((item: any) => {
+                    const d = new Date(item.date)
+                    return d >= startDate && d <= endDate
+                })
+                combinedData = [...combinedData, ...filteredLocal]
+            }
+
+            setReportData(combinedData)
+
+            if (combinedData.length === 0) setToastMessage("⚠️ Bu aralıkta kayıt bulunamadı.")
+            else setToastMessage(`✅ ${combinedData.length} kayıt listelendi (Demo dahil).`)
+
         } catch (e) {
             setToastMessage("❌ Veri çekilemedi.")
+            // On API fail, at least show local
+            const localDataRaw = localStorage.getItem("overtime_demo_data")
+            if (localDataRaw) {
+                const localData = JSON.parse(localDataRaw)
+                const filteredLocal = localData.filter((item: any) => {
+                    const d = new Date(item.date)
+                    return d >= startDate && d <= endDate
+                })
+                setReportData(filteredLocal)
+                setToastMessage(`✅ ${filteredLocal.length} yerel kayıt listelendi.`)
+            }
         } finally {
             setIsLoading(false)
         }
