@@ -6,7 +6,7 @@ export async function POST(req: Request) {
         const { username, password } = await req.json()
 
         if (!username || !password) {
-            return NextResponse.json({ error: "Kullanıcı adı ve şifre zorunludur." }, { status: 400 })
+            return NextResponse.json({ error: "Eksik bilgi: Kullanıcı adı ve şifre giriniz (v2)." }, { status: 400 })
         }
 
         // Check availability
